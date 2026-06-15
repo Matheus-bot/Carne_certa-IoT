@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CarneCerta IoT - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        background: #050814;
+      }
+      .glow-border {
+        box-shadow: 0 0 35px rgba(14, 165, 233, 0.18), 0 0 60px rgba(16, 185, 129, 0.12);
+      }
+      .danger-glow {
+        box-shadow: 0 0 30px rgba(239, 68, 68, 0.35);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-100">
+    <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <header class="mb-8 rounded-3xl border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p class="text-sm uppercase tracking-[0.35em] text-cyan-400/80">CarneCerta IoT</p>
+            <h1 class="mt-3 text-4xl font-semibold text-white">Monitoramento Inteligente de Câmaras Frias</h1>
+            <p class="max-w-2xl text-slate-400">Dashboard em tempo real com ESP32 para controle de temperatura e status das portas.</p>
+          </div>
+          <div class="rounded-3xl bg-slate-900/80 px-5 py-4 text-right text-slate-300 shadow-xl shadow-cyan-500/10">
+            <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Conexão em tempo real</p>
+            <p id="connectionStatus" class="mt-2 text-lg font-semibold text-emerald-400">Online</p>
+          </div>
+        </div>
+      </header>
+
+      <main class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <section class="space-y-6">
+          <div class="grid gap-6 md:grid-cols-2">
+            <article class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-cyan-500/10 glow-border">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm uppercase tracking-[0.25em] text-cyan-400/70">Temperatura da Câmara</p>
+                  <h2 id="temperatureValue" class="mt-3 text-5xl font-semibold text-white">-- °C</h2>
+                  <p id="temperatureHint" class="mt-2 max-w-xl text-slate-400">Aguardando dados do ESP32...</p>
+                </div>
+                <div class="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-cyan-500/10 text-cyan-300 shadow-lg shadow-cyan-500/20">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9V3m0 18v-6m-3.5 6h7a2.5 2.5 0 002.5-2.5V8a2.5 2.5 0 00-2.5-2.5h-7A2.5 2.5 0 006.5 8v8.5A2.5 2.5 0 009.5 19z" />
+                  </svg>
+                </div>
+              </div>
+            </article>
+
+            <article id="doorCard" class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-teal-500/10 glow-border transition-all duration-300">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm uppercase tracking-[0.25em] text-teal-300/70">Status da Porta</p>
+                  <h2 id="doorStatus" class="mt-3 text-5xl font-semibold text-emerald-400">Desconhecido</h2>
+                  <p id="doorHint" class="mt-2 max-w-xl text-slate-400">Recebendo atualizações do ESP32.</p>
+                </div>
+                <div class="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-500/10 text-emerald-300 shadow-lg shadow-emerald-500/20">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 7h18M7 7v14H5V7H3m16 0v14h2V7h-2z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 7V5a3 3 0 116 0v2" />
+                  </svg>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <article class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/40">
+            <div class="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Histórico de Temperatura</p>
+                <h3 class="mt-2 text-2xl font-semibold text-white">Últimas leituras</h3>
+              </div>
+              <span class="rounded-full bg-slate-900 px-4 py-2 text-xs uppercase tracking-[0.25em] text-slate-400">Tempo real</span>
+            </div>
+            <div class="rounded-3xl bg-slate-900 p-4">
+              <canvas id="temperatureChart" class="h-72 w-full"></canvas>
+            </div>
+          </article>
+        </section>
+
+        <aside class="space-y-6">
+          <article class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/30">
+            <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Resumo Rápido</p>
+            <div class="mt-6 space-y-4 text-slate-300">
+              <div class="flex items-center justify-between rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4">
+                <span class="text-sm text-slate-400">Última temperatura</span>
+                <span id="lastTemp" class="text-lg font-semibold text-cyan-300">-- °C</span>
+              </div>
+              <div class="flex items-center justify-between rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4">
+                <span class="text-sm text-slate-400">Estado da porta</span>
+                <span id="lastDoor" class="text-lg font-semibold text-emerald-300">--</span>
+              </div>
+              <div class="rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4 text-slate-400">
+                <p class="text-sm">Indicador de desempenho</p>
+                <p class="mt-2 text-base">Temperatura segura entre -25°C e 4°C. Alarmes são exibidos automaticamente em vermelho.</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/30">
+            <div class="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Simulação e Alarme</p>
+                <h3 class="mt-2 text-2xl font-semibold text-white">Teste rápido</h3>
+              </div>
+              <span id="alarmIndicator" class="rounded-full bg-emerald-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-emerald-300">Sem alarme</span>
+            </div>
+            <div class="space-y-4 text-slate-300">
+              <div class="grid gap-3">
+                <div class="rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4">
+                  <label class="block text-sm uppercase tracking-[0.25em] text-slate-500">Temperatura manual</label>
+                  <div class="mt-3 flex items-center gap-3">
+                    <input id="simulateTempInput" type="number" step="0.1" value="2.0" class="w-full rounded-3xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20" />
+                    <button id="simulateTempButton" class="rounded-3xl bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400">Simular</button>
+                  </div>
+                </div>
+                <div class="flex flex-col gap-3 rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4">
+                  <button id="simulateOpenButton" class="rounded-3xl bg-rose-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-400">Simular porta aberta</button>
+                  <button id="simulateClosedButton" class="rounded-3xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">Simular porta fechada</button>
+                </div>
+                <button id="resetButton" class="w-full rounded-3xl border border-slate-700/70 bg-slate-900/80 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:border-cyan-400 hover:text-cyan-300">Resetar para dados reais</button>
+              </div>
+            </div>
+          </article>
+        </aside>
+      </main>
+    </div>
+
+    <script>
+      const connectionStatus = document.getElementById('connectionStatus');
+      const temperatureValue = document.getElementById('temperatureValue');
+      const temperatureHint = document.getElementById('temperatureHint');
+      const doorStatus = document.getElementById('doorStatus');
+      const doorHint = document.getElementById('doorHint');
+      const doorCard = document.getElementById('doorCard');
+      const lastTemp = document.getElementById('lastTemp');
+      const lastDoor = document.getElementById('lastDoor');
+      const alarmIndicator = document.getElementById('alarmIndicator');
+      const simulateTempInput = document.getElementById('simulateTempInput');
+      const simulateTempButton = document.getElementById('simulateTempButton');
+      const simulateOpenButton = document.getElementById('simulateOpenButton');
+      const simulateClosedButton = document.getElementById('simulateClosedButton');
+      const resetButton = document.getElementById('resetButton');
+
+      const maxHistory = 20;
+      const temperatureHistory = [];
+      const labels = [];
+      let alarmOscillator = null;
+      let alarmGain = null;
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+      const ctx = document.getElementById('temperatureChart').getContext('2d');
+      const temperatureChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Temperatura (°C)',
+              data: temperatureHistory,
+              borderColor: '#22c55e',
+              backgroundColor: 'rgba(34, 197, 94, 0.18)',
+              borderWidth: 3,
+              tension: 0.35,
+              pointRadius: 4,
+              pointBackgroundColor: '#22c55e',
+              fill: true,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              grid: { color: 'rgba(148,163,184,0.12)' },
+              ticks: { color: '#94a3b8' },
+            },
+            y: {
+              grid: { color: 'rgba(148,163,184,0.12)' },
+              ticks: { color: '#94a3b8' },
+            },
+          },
+          plugins: {
+            legend: { labels: { color: '#cbd5e1' } },
+            tooltip: {
+              backgroundColor: '#0f172a',
+              titleColor: '#fff',
+              bodyColor: '#cbd5e1',
+            },
+          },
+        },
+      });
+
+      function updateTemperatureDisplay(value) {
+        const formatted = `${value.toFixed(1).replace('.', ',')} °C`;
+        temperatureValue.textContent = formatted;
+        lastTemp.textContent = formatted;
+
+        if (value >= 4) {
+          temperatureHint.textContent = 'Alerta: temperatura acima do limite seguro!';
+          temperatureValue.classList.add('text-rose-400');
+          temperatureValue.classList.remove('text-white');
+        } else if (value >= 0) {
+          temperatureHint.textContent = 'Temperatura está dentro do limite, mas próxima do alerta.';
+          temperatureValue.classList.add('text-amber-300');
+          temperatureValue.classList.remove('text-white');
+        } else {
+          temperatureHint.textContent = 'Temperatura ideal. Câmara sob controle.';
+          temperatureValue.classList.add('text-cyan-300');
+          temperatureValue.classList.remove('text-rose-400', 'text-amber-300');
+        }
+      }
+
+      function playAlarm() {
+        if (alarmOscillator) return;
+        alarmOscillator = audioContext.createOscillator();
+        alarmGain = audioContext.createGain();
+        alarmOscillator.type = 'sine';
+        alarmOscillator.frequency.setValueAtTime(520, audioContext.currentTime);
+        alarmGain.gain.setValueAtTime(0.05, audioContext.currentTime);
+        alarmOscillator.connect(alarmGain).connect(audioContext.destination);
+        alarmOscillator.start();
+      }
+
+      function stopAlarm() {
+        if (!alarmOscillator) return;
+        alarmGain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.15);
+        alarmOscillator.stop(audioContext.currentTime + 0.2);
+        alarmOscillator = null;
+        alarmGain = null;
+      }
+
+      function setAlarmState(active, message) {
+        alarmIndicator.textContent = message;
+        alarmIndicator.classList.toggle('bg-rose-500/15', active);
+        alarmIndicator.classList.toggle('text-rose-300', active);
+        alarmIndicator.classList.toggle('bg-emerald-500/10', !active);
+        alarmIndicator.classList.toggle('text-emerald-300', !active);
+      }
+
+      function updateDoorDisplay(status) {
+        const normalized = status.toString().toLowerCase();
+        const isOpen = normalized === 'aberta' || normalized === 'open' || normalized === '1' || normalized === 'true';
+        doorStatus.textContent = isOpen ? 'ABERTA' : 'FECHADA';
+        lastDoor.textContent = isOpen ? 'ABERTA' : 'FECHADA';
+        doorHint.textContent = isOpen ? 'Atenção: porta aberta!' : 'Porta fechada com segurança.';
+
+        doorCard.classList.toggle('bg-rose-950/80', isOpen);
+        doorCard.classList.toggle('border-rose-600/50', isOpen);
+        doorCard.classList.toggle('shadow-rose-500/20', isOpen);
+        doorCard.classList.toggle('text-rose-200', isOpen);
+
+        doorCard.classList.toggle('bg-slate-950/80', !isOpen);
+        doorCard.classList.toggle('border-slate-700/50', !isOpen);
+        doorCard.classList.toggle('shadow-teal-500/10', !isOpen);
+        return isOpen;
+      }
+
+      function checkAlarm(value, isOpen) {
+        if (value >= 4 || isOpen) {
+          setAlarmState(true, 'ALARME ATIVO');
+          playAlarm();
+        } else {
+          setAlarmState(false, 'Sem alarme');
+          stopAlarm();
+        }
+      }
+
+      function addTemperatureHistory(value) {
+        const timestamp = new Date();
+        const label = `${timestamp.getHours().toString().padStart(2, '0')}:${timestamp.getMinutes().toString().padStart(2, '0')}`;
+        if (temperatureHistory.length >= maxHistory) {
+          temperatureHistory.shift();
+          labels.shift();
+        }
+        temperatureHistory.push(value);
+        labels.push(label);
+        temperatureChart.update();
+      }
+
+      const socket = new WebSocket('ws://localhost:8080');
+
+      socket.addEventListener('open', () => {
+        connectionStatus.textContent = 'Conectado';
+        connectionStatus.classList.remove('text-rose-400');
+        connectionStatus.classList.add('text-emerald-400');
+      });
+
+      socket.addEventListener('message', (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.temperatura !== undefined && payload.porta !== undefined) {
+            const temperatura = Number(payload.temperatura);
+            const portaAberta = updateDoorDisplay(payload.porta);
+            updateTemperatureDisplay(temperatura);
+            checkAlarm(temperatura, portaAberta);
+            addTemperatureHistory(temperatura);
+          }
+        } catch (error) {
+          console.warn('Erro ao processar dados do WebSocket:', error);
+        }
+      });
+
+      function simulateData(temperatura, porta) {
+        updateTemperatureDisplay(temperatura);
+        const portaAberta = updateDoorDisplay(porta);
+        checkAlarm(temperatura, portaAberta);
+        addTemperatureHistory(temperatura);
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ temperatura, porta }));
+        }
+      }
+
+      simulateTempButton.addEventListener('click', () => {
+        const temperatura = Number(simulateTempInput.value) || 0;
+        simulateData(temperatura, lastDoor.textContent === 'ABERTA' ? 'aberta' : 'fechada');
+      });
+
+      simulateOpenButton.addEventListener('click', () => simulateData(Number(simulateTempInput.value) || 2.0, 'aberta'));
+      simulateClosedButton.addEventListener('click', () => simulateData(Number(simulateTempInput.value) || 2.0, 'fechada'));
+      resetButton.addEventListener('click', () => {
+        temperatureHint.textContent = 'Aguardando dados do ESP32...';
+        doorHint.textContent = 'Recebendo atualizações do ESP32.';
+        setAlarmState(false, 'Sem alarme');
+        stopAlarm();
+      });
+
+      socket.addEventListener('close', () => {
+        connectionStatus.textContent = 'Desconectado';
+        connectionStatus.classList.remove('text-emerald-400');
+        connectionStatus.classList.add('text-rose-400');
+      });
+
+      socket.addEventListener('error', () => {
+        connectionStatus.textContent = 'Erro de conexão';
+        connectionStatus.classList.remove('text-emerald-400');
+        connectionStatus.classList.add('text-rose-400');
+      });
+    </script>
+  </body>
+</html>
