@@ -9,6 +9,7 @@ app.use(express.static('public'));
 
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+let lastReading = null;
 
 function broadcast(data) {
   wss.clients.forEach((client) => {
@@ -20,6 +21,10 @@ function broadcast(data) {
 
 wss.on('connection', (ws, req) => {
   console.log('WebSocket client connected:', req.socket.remoteAddress);
+
+  if (lastReading) {
+    ws.send(JSON.stringify(lastReading));
+  }
 
   ws.on('message', (message) => {
     try {
@@ -33,6 +38,7 @@ wss.on('connection', (ws, req) => {
           porta: String(payload.porta),
           timestamp: new Date().toISOString(),
         };
+        lastReading = data;
         console.log('Recebido do ESP32:', data);
         broadcast(data);
       }

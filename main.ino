@@ -21,6 +21,5 @@ void setup() {
 }
 
 void loop() {
-  // Por enquanto fica vazio, só queremos testar a inicialização
   delay(1000);
 }

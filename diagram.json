@@ -27,8 +27,4 @@
     [ "buzzer:2", "esp:GND.6", "black", [] ]
   ],
   "dependencies": {}
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 09b2bfe5e34242056c5e1632a159666bc80de2f3

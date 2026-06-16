@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoramento de Balcões Refrigerados - CarneCerta IoT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        background: #050814;
+      }
+      .glow-border {
+        box-shadow: 0 0 35px rgba(14, 165, 233, 0.18), 0 0 60px rgba(16, 185, 129, 0.12);
+      }
+      .danger-glow {
+        box-shadow: 0 0 30px rgba(239, 68, 68, 0.35);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-100">
+    <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <header class="mb-8 rounded-3xl border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p class="text-sm uppercase tracking-[0.35em] text-cyan-400/80">CarneCerta IoT</p>
+            <h1 class="mt-3 text-4xl font-semibold text-white">Monitoramento Inteligente de Balcões Refrigerados</h1>
+            <p class="max-w-2xl text-slate-400">Dashboard em tempo real para controle da temperatura dos balcões de exposição.</p>
+          </div>
+          <div class="grid gap-4 rounded-3xl bg-slate-900/80 px-5 py-4 text-slate-300 shadow-xl shadow-cyan-500/10">
+            <div>
+              <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Conexão em tempo real</p>
+              <p id="connectionStatus" class="mt-2 text-lg font-semibold text-emerald-400">Online</p>
+            </div>
+            <a href="index.html" class="inline-flex items-center justify-center rounded-3xl bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400">Voltar ao Dashboard Principal</a>
+          </div>
+        </div>
+      </header>
+
+      <main class="space-y-6">
+        <section class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <article class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-cyan-500/10 glow-border">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm uppercase tracking-[0.25em] text-cyan-400/70">Balcões Refrigerados</p>
+                <h2 class="mt-3 text-3xl font-semibold text-white">Temperatura total em tempo real</h2>
+                <p class="mt-2 max-w-2xl text-slate-400">Acompanhe cada setor do balcão com alertas automáticos e status visual imediato.</p>
+              </div>
+              <div class="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-cyan-500/10 text-cyan-300 shadow-lg shadow-cyan-500/20">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.75h4.5a2.25 2.25 0 012.25 2.25v12a1.5 1.5 0 01-1.5 1.5h-6a1.5 1.5 0 01-1.5-1.5v-12A2.25 2.25 0 019.75 3.75z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5v6" />
+                </svg>
+              </div>
+            </div>
+          </article>
+
+          <article class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/30">
+            <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Resumo de Operação</p>
+            <div class="mt-6 space-y-4 text-slate-300">
+              <div class="flex items-center justify-between rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4">
+                <span class="text-sm text-slate-400">Balcões monitorados</span>
+                <span id="totalStalls" class="text-lg font-semibold text-cyan-300">4</span>
+              </div>
+              <div class="flex items-center justify-between rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4">
+                <span class="text-sm text-slate-400">Alertas ativos</span>
+                <span id="activeAlerts" class="text-lg font-semibold text-amber-300">0</span>
+              </div>
+              <div class="flex items-center justify-between rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4">
+                <span class="text-sm text-slate-400">Temperatura média</span>
+                <span id="averageTemp" class="text-lg font-semibold text-cyan-300">-- °C</span>
+              </div>
+              <div class="flex items-center justify-between rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4">
+                <span class="text-sm text-slate-400">Balcão mais quente</span>
+                <span id="hottestStall" class="text-lg font-semibold text-rose-300">--</span>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="grid gap-6 lg:grid-cols-2">
+          <div class="grid gap-6 md:grid-cols-2">
+            <article id="stall-B1" class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/40 transition duration-300">
+              <div class="flex items-start gap-4">
+                <div class="inline-flex h-14 w-14 items-center justify-center rounded-3xl bg-emerald-500/10 text-emerald-300 shadow-lg shadow-emerald-500/20">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M6 6h12M6 14h12M6 18h12" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Balcão 01</p>
+                  <h3 class="mt-2 text-2xl font-semibold text-white">Bovinos</h3>
+                </div>
+              </div>
+              <div class="mt-6 space-y-3">
+                <p class="text-5xl font-semibold text-cyan-300" id="temp-B1">-- °C</p>
+                <span id="status-B1" class="inline-flex rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300">Normal</span>
+              </div>
+            </article>
+
+            <article id="stall-B2" class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/40 transition duration-300">
+              <div class="flex items-start gap-4">
+                <div class="inline-flex h-14 w-14 items-center justify-center rounded-3xl bg-emerald-500/10 text-emerald-300 shadow-lg shadow-emerald-500/20">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Balcão 02</p>
+                  <h3 class="mt-2 text-2xl font-semibold text-white">Frangos</h3>
+                </div>
+              </div>
+              <div class="mt-6 space-y-3">
+                <p class="text-5xl font-semibold text-cyan-300" id="temp-B2">-- °C</p>
+                <span id="status-B2" class="inline-flex rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300">Normal</span>
+              </div>
+            </article>
+
+            <article id="stall-B3" class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/40 transition duration-300">
+              <div class="flex items-start gap-4">
+                <div class="inline-flex h-14 w-14 items-center justify-center rounded-3xl bg-emerald-500/10 text-emerald-300 shadow-lg shadow-emerald-500/20">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 6h14M9 6v12M15 6v12M5 18h14" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Balcão 03</p>
+                  <h3 class="mt-2 text-2xl font-semibold text-white">Suínos</h3>
+                </div>
+              </div>
+              <div class="mt-6 space-y-3">
+                <p class="text-5xl font-semibold text-cyan-300" id="temp-B3">-- °C</p>
+                <span id="status-B3" class="inline-flex rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300">Normal</span>
+              </div>
+            </article>
+
+            <article id="stall-B4" class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/40 transition duration-300">
+              <div class="flex items-start gap-4">
+                <div class="inline-flex h-14 w-14 items-center justify-center rounded-3xl bg-emerald-500/10 text-emerald-300 shadow-lg shadow-emerald-500/20">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h12M6 10h12M6 14h12M6 18h12" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Balcão 04</p>
+                  <h3 class="mt-2 text-2xl font-semibold text-white">Especiais</h3>
+                </div>
+              </div>
+              <div class="mt-6 space-y-3">
+                <p class="text-5xl font-semibold text-cyan-300" id="temp-B4">-- °C</p>
+                <span id="status-B4" class="inline-flex rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300">Normal</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
+          <article class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/40">
+            <div class="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Histórico de Temperatura</p>
+                <h3 class="mt-2 text-2xl font-semibold text-white">Temperatura dos balcões</h3>
+              </div>
+              <span class="rounded-full bg-slate-900 px-4 py-2 text-xs uppercase tracking-[0.25em] text-slate-400">Atualização simulada</span>
+            </div>
+            <div class="rounded-3xl bg-slate-900 p-4">
+              <canvas id="stallChart" class="h-80 w-full"></canvas>
+            </div>
+          </article>
+
+          <aside class="space-y-6">
+            <article class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/30">
+              <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Painel de Alertas</p>
+              <div id="alertList" class="mt-6 space-y-3 text-slate-300">
+                <div class="rounded-3xl border border-amber-500/20 bg-amber-500/5 p-4">
+                  <p class="font-semibold text-amber-300">Nenhum alerta ativo</p>
+                  <p class="text-sm text-slate-400">O sistema está monitorando os balcões.</p>
+                </div>
+              </div>
+            </article>
+
+            <article class="rounded-[2rem] border border-slate-700/50 bg-slate-950/80 p-6 shadow-2xl shadow-slate-950/30">
+              <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Simulação</p>
+              <div class="mt-6 space-y-4 text-slate-300">
+                <div class="rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4">
+                  <label class="block text-sm uppercase tracking-[0.25em] text-slate-500">Escolher balcão</label>
+                  <select id="stallSelect" class="mt-3 w-full rounded-3xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20">
+                    <option value="B1">Balcão 01 - Bovinos</option>
+                    <option value="B2">Balcão 02 - Frangos</option>
+                    <option value="B3">Balcão 03 - Suínos</option>
+                    <option value="B4">Balcão 04 - Especiais</option>
+                  </select>
+                </div>
+                <div class="rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4">
+                  <label class="block text-sm uppercase tracking-[0.25em] text-slate-500">Temperatura manual</label>
+                  <input id="manualTemp" type="number" step="0.1" value="5.0" class="mt-3 w-full rounded-3xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20" />
+                </div>
+                <button id="applyManual" type="button" class="w-full rounded-3xl bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400">Aplicar temperatura manual</button>
+                <button id="simulateFailure" type="button" class="w-full rounded-3xl bg-rose-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-400">Simular falha de refrigeração</button>
+                <button id="simulateOscillation" type="button" class="w-full rounded-3xl bg-amber-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-400">Simular oscilação</button>
+                <button id="restoreNormal" type="button" class="w-full rounded-3xl border border-slate-700/70 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:border-cyan-400 hover:text-cyan-300">Restaurar operação normal</button>
+              </div>
+            </article>
+          </aside>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        try {
+          const connectStatus = document.getElementById('connectionStatus');
+          const alertList = document.getElementById('alertList');
+          const totalStalls = document.getElementById('totalStalls');
+          const activeAlerts = document.getElementById('activeAlerts');
+          const averageTemp = document.getElementById('averageTemp');
+          const hottestStall = document.getElementById('hottestStall');
+          const stallSelect = document.getElementById('stallSelect');
+          const manualTemp = document.getElementById('manualTemp');
+          const applyManual = document.getElementById('applyManual');
+          const simulateFailure = document.getElementById('simulateFailure');
+          const simulateOscillation = document.getElementById('simulateOscillation');
+          const restoreNormal = document.getElementById('restoreNormal');
+
+          const stallData = {
+            B1: { name: 'Balcão 01', label: 'Bovinos', temp: 3.6, status: 'Normal' },
+            B2: { name: 'Balcão 02', label: 'Frangos', temp: 4.8, status: 'Atenção' },
+            B3: { name: 'Balcão 03', label: 'Suínos', temp: 3.1, status: 'Normal' },
+            B4: { name: 'Balcão 04', label: 'Especiais', temp: 5.2, status: 'Atenção' },
+          };
+
+          const chartLabels = [];
+          const stallOrder = ['B1', 'B2', 'B3', 'B4'];
+          const stallStorageKey = 'carnecerta-stall-state';
+          const lastReadingKey = 'carnecerta-last-reading';
+
+          function saveStallState() { localStorage.setItem(stallStorageKey, JSON.stringify(stallData)); }
+
+          function loadStallState() {
+            const saved = localStorage.getItem(stallStorageKey);
+            if (!saved) return;
+            try {
+              const parsed = JSON.parse(saved);
+              Object.keys(parsed).forEach((key) => {
+                if (stallData[key] && typeof parsed[key].temp === 'number') stallData[key].temp = parsed[key].temp;
+              });
+            } catch (error) { console.warn('Erro ao carregar estado dos balcões:', error); }
+          }
+
+          function loadLastReading() {
+            const saved = localStorage.getItem(lastReadingKey);
+            if (!saved) return;
+            try {
+              const payload = JSON.parse(saved);
+              if (payload.temperatura !== undefined) {
+                stallData.B1.temp = Number(payload.temperatura);
+                addAlert(`Última temperatura recebida aplicada em ${stallData.B1.label}: ${formatTemp(stallData.B1.temp)}`, getStatus(stallData.B1.temp));
+              }
+            } catch (error) { console.warn('Erro ao carregar a última leitura:', error); }
+          }
+
+          function applyIncomingTemperature(temperatura) {
+            const value = Number(temperatura);
+            if (Number.isNaN(value)) return;
+            stallData.B1.temp = value;
+            updateStalls();
+            addAlert(`Temperatura recebida do ESP32 aplicada em ${stallData.B1.label}: ${formatTemp(value)}`, getStatus(value));
+            saveStallState();
+          }
+
+          const datasets = Object.keys(stallData).map((key, index) => ({
+            label: stallData[key].label,
+            data: [],
+            borderColor: ['#22c55e', '#38bdf8', '#f59e0b', '#ef4444'][index],
+            backgroundColor: ['rgba(34,197,94,0.18)', 'rgba(56,189,248,0.18)', 'rgba(245,158,11,0.18)', 'rgba(239,68,68,0.18)'][index],
+            tension: 0.35,
+            pointRadius: 4,
+            fill: false,
+          }));
+
+          const chartCtx = document.getElementById('stallChart').getContext('2d');
+          const stallChart = new Chart(chartCtx, {
+            type: 'line',
+            data: { labels: chartLabels, datasets },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { color: '#94a3b8' } }, y: { beginAtZero: false, grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { color: '#94a3b8' } } }, plugins: { legend: { labels: { color: '#cbd5e1' } }, tooltip: { backgroundColor: '#0f172a', titleColor: '#fff', bodyColor: '#cbd5e1' } } }
+          });
+
+          function getStatus(temp) { if (temp > 4) return 'Crítico'; if (temp > 2) return 'Atenção'; return 'Normal'; }
+
+          function getStatusClasses(status) { switch (status) { case 'Crítico': return ['bg-rose-500/15', 'text-rose-300']; case 'Atenção': return ['bg-amber-500/15', 'text-amber-300']; default: return ['bg-emerald-500/15', 'text-emerald-300']; } }
+
+          function formatTemp(value) { return `${value.toFixed(1).replace('.', ',')} °C`; }
+
+          function updateStallCard(key) {
+            const stall = stallData[key];
+            const tempEl = document.getElementById(`temp-${key}`);
+            const statusEl = document.getElementById(`status-${key}`);
+            const cardEl = document.getElementById(`stall-${key}`);
+            if (!tempEl || !statusEl || !cardEl) return;
+            const status = getStatus(stall.temp);
+            stall.status = status;
+            tempEl.textContent = formatTemp(stall.temp);
+            statusEl.textContent = status;
+            const [bgClass, textClass] = getStatusClasses(status);
+            statusEl.className = `inline-flex rounded-full px-4 py-2 text-sm font-semibold ${bgClass} ${textClass}`;
+            cardEl.classList.remove('border-rose-500/40', 'border-amber-500/40', 'border-emerald-500/40');
+            if (status === 'Crítico') cardEl.classList.add('border-rose-500/40');
+            if (status === 'Atenção') cardEl.classList.add('border-amber-500/40');
+            if (status === 'Normal') cardEl.classList.add('border-emerald-500/40');
+          }
+
+          function updateStalls() { Object.keys(stallData).forEach(updateStallCard); updateSummary(); }
+
+          function updateSummary() {
+            const values = Object.values(stallData);
+            const active = values.filter((stall) => stall.status !== 'Normal').length;
+            const average = values.reduce((sum, stall) => sum + stall.temp, 0) / values.length;
+            const hottest = values.reduce((current, stall) => (stall.temp > current.temp ? stall : current), values[0]);
+            totalStalls.textContent = values.length;
+            activeAlerts.textContent = active;
+            averageTemp.textContent = formatTemp(average);
+            hottestStall.textContent = `${hottest.label} (${formatTemp(hottest.temp)})`;
+          }
+
+          function addAlert(message, level) {
+            const alertItem = document.createElement('div');
+            const classes = { Crítico: 'border-rose-500/20 bg-rose-500/5 text-rose-200', Atenção: 'border-amber-500/20 bg-amber-500/5 text-amber-200', Normal: 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200' }[level] || 'border-slate-700/70 bg-slate-900/80 text-slate-300';
+            alertItem.className = `rounded-3xl border p-4 ${classes}`;
+            alertItem.innerHTML = `<p class="font-semibold">${message}</p><p class="mt-1 text-sm text-slate-400">${new Date().toLocaleTimeString()}</p>`;
+            alertList.prepend(alertItem);
+            if (alertList.children.length > 6) alertList.removeChild(alertList.lastChild);
+          }
+
+          function refreshChart() { const now = new Date(); const label = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`; if (chartLabels.length >= 12) { chartLabels.shift(); stallChart.data.datasets.forEach((dataset) => dataset.data.shift()); } chartLabels.push(label); stallChart.data.datasets.forEach((dataset, index) => { const key = stallOrder[index]; dataset.data.push(stallData[key].temp); }); stallChart.update(); }
+
+          function randomizeStalls() { Object.keys(stallData).forEach((key) => { const stall = stallData[key]; const variation = (Math.random() - 0.5) * 0.6; stall.temp = Math.max(1.5, Math.min(8.5, stall.temp + variation)); const previous = stall.status; const current = getStatus(stall.temp); if (previous !== current && current !== 'Normal') addAlert(`${stall.label} entrou em estado ${current}`, current); }); updateStalls(); refreshChart(); }
+
+          function simulateFailureMode() { Object.keys(stallData).forEach((key) => { stallData[key].temp = 6.8 + Math.random() * 1.5; }); addAlert('Falha de refrigeração detectada em vários balcões', 'Crítico'); updateStalls(); refreshChart(); saveStallState(); }
+
+          function simulateOscillation() { Object.keys(stallData).forEach((key) => { const stall = stallData[key]; stall.temp += (Math.random() - 0.5) * 2.0; stall.temp = Math.max(1.5, Math.min(8.5, stall.temp)); }); addAlert('Oscilação de temperatura detectada', 'Atenção'); updateStalls(); refreshChart(); saveStallState(); }
+
+          function restoreNormal() { stallData.B1.temp = 3.6; stallData.B2.temp = 3.8; stallData.B3.temp = 3.2; stallData.B4.temp = 3.9; addAlert('Operação normal restaurada', 'Normal'); updateStalls(); refreshChart(); saveStallState(); }
+
+          // Apply manual temperature: if input empty, try to use last dashboard reading
+          applyManual.addEventListener('click', (event) => {
+            event.preventDefault();
+            const key = stallSelect.value;
+            let value = Number(manualTemp.value);
+            if (Number.isNaN(value)) {
+              const saved = localStorage.getItem(lastReadingKey);
+              if (saved) {
+                try { const p = JSON.parse(saved); if (p.temperatura !== undefined) value = Number(p.temperatura); } catch (e) {}
+              }
+            }
+            if (Number.isNaN(value)) return;
+            stallData[key].temp = Math.max(0, Math.min(20, value));
+            updateStalls();
+            addAlert(`Temperatura aplicada em ${stallData[key].label}: ${formatTemp(stallData[key].temp)}`, stallData[key].status);
+            refreshChart();
+            saveStallState();
+          });
+
+          simulateFailure.addEventListener('click', simulateFailureMode);
+          simulateOscillation.addEventListener('click', simulateOscillation);
+          restoreNormal.addEventListener('click', restoreNormal);
+
+          const socket = new WebSocket('ws://localhost:8080');
+          socket.addEventListener('open', () => { connectStatus.textContent = 'Conectado'; connectStatus.classList.remove('text-rose-400'); connectStatus.classList.add('text-emerald-400'); });
+          socket.addEventListener('message', (event) => { try { const payload = JSON.parse(event.data); if (payload.temperatura !== undefined) applyIncomingTemperature(payload.temperatura); } catch (error) { console.warn('Erro ao receber dados via WebSocket:', error); } });
+          socket.addEventListener('close', () => { connectStatus.textContent = 'Desconectado'; connectStatus.classList.remove('text-emerald-400'); connectStatus.classList.add('text-rose-400'); });
+          socket.addEventListener('error', () => { connectStatus.textContent = 'Erro de conexão'; connectStatus.classList.remove('text-emerald-400'); connectStatus.classList.add('text-rose-400'); });
+
+          loadStallState();
+          loadLastReading();
+          updateStalls();
+          refreshChart();
+
+        } catch (err) { console.error('Erro no script de balcão:', err); }
+      });
+    </script>
+  </body>
+</html>
