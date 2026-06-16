@@ -6,7 +6,7 @@
 
 ---
 
-## 🎯 Objetivos do Projeto
+##  Objetivos do Projeto
 
 1. **Monitoramento em Tempo Real**: Capturar e exibir dados de temperatura de múltiplas câmaras/balcões
 2. **Detecção de Anomalias**: Identificar automaticamente quando a temperatura ultrapassa limites seguros
@@ -17,7 +17,7 @@
 
 ---
 
-## 🏗️ Arquitetura do Sistema
+##  Arquitetura do Sistema
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -55,7 +55,7 @@
 
 ---
 
-## 🔧 Funcionalidades Principais
+##  Funcionalidades Principais
 
 ### 1. **Monitoramento de Temperatura**
 - Leitura periódica do sensor DHT22 (a cada 2 segundos)
@@ -102,7 +102,7 @@
 
 ---
 
-## 💻 Tecnologias Utilizadas
+##  Tecnologias Utilizadas
 
 ### **Backend**
 | Tecnologia | Versão | Função |
@@ -145,7 +145,7 @@
 
 ### **Protocolo WebSocket**
 
-#### 1️⃣ **Registro de Clientes**
+#### 1️**Registro de Clientes**
 ```json
 // ESP32 registra como cliente
 {
@@ -204,7 +204,15 @@
 
 ---
 
-## 🚀 Como Usar o Sistema
+##  Como Usar o Sistema
+
+Aplicação Web
+
+https://carne-certa-iot.onrender.com
+
+Simulação ESP32 (Wokwi)
+
+https://wokwi.com/projects/464368907720179713
 
 ### **1. Iniciar o Servidor**
 ```bash
@@ -212,7 +220,7 @@ cd c:\Users\HOME\OneDrive\Desktop\CarneCertaIoT
 npm install  # (primeira vez apenas)
 node server.js
 ```
-✅ Servidor rodará em `http://localhost:8080`
+ Servidor rodará em `http://localhost:8080`
 
 ### **2. Acessar as Interfaces**
 - **Dashboard Principal**: http://localhost:8080/
@@ -322,7 +330,7 @@ CarneCertaIoT/
 
 ---
 
-## 📝 Exemplos de Uso
+##  Exemplos de Uso
 
 ### Cenário 1: Temperatura Elevada
 1. Temperatura sobe para 5°C
@@ -351,7 +359,7 @@ CarneCertaIoT/
 
 ---
 
-## 🎓 Tecnologias Aprendidas
+## Tecnologias Aprendidas
 
 Este projeto integra conhecimentos em:
 - **IoT e Sensores**: Leitura de DHT22, GPIO
