@@ -387,6 +387,16 @@ Este projeto integra conhecimentos em:
 
 ---
 
+## time:
+Barbara Helena Preto Brandino
+Clara Vecchio Machado da Silva
+Jacqueline 
+Felipe Ferreira de França
+Matheus Henrique
+
+
+
+
 ## 📄 Licença
 
 Projeto CarneCerta IoT - 2026
