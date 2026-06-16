@@ -126,6 +126,10 @@
                   <button id="simulateOpenButton" class="rounded-3xl bg-rose-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-400">Simular porta aberta</button>
                   <button id="simulateClosedButton" class="rounded-3xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">Simular porta fechada</button>
                 </div>
+                <div class="grid gap-3 rounded-3xl border border-slate-700/70 bg-slate-900/80 p-4">
+                  <button id="manualActivateButton" class="w-full rounded-3xl bg-amber-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-400">Acionar alarme manual</button>
+                  <button id="manualDeactivateButton" class="w-full rounded-3xl bg-slate-700 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-600">Desativar alarme manual</button>
+                </div>
                 <button id="resetButton" class="w-full rounded-3xl border border-slate-700/70 bg-slate-900/80 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:border-cyan-400 hover:text-cyan-300">Resetar para dados reais</button>
               </div>
             </div>
@@ -148,6 +152,8 @@
       const simulateTempButton = document.getElementById('simulateTempButton');
       const simulateOpenButton = document.getElementById('simulateOpenButton');
       const simulateClosedButton = document.getElementById('simulateClosedButton');
+      const manualActivateButton = document.getElementById('manualActivateButton');
+      const manualDeactivateButton = document.getElementById('manualDeactivateButton');
       const resetButton = document.getElementById('resetButton');
       const storageKey = 'carnecerta-last-reading';
 
@@ -308,9 +314,21 @@
         temperatureChart.update();
       }
 
+      function simulateData(temperatura, porta) {
+        updateTemperatureDisplay(temperatura);
+        const portaAberta = updateDoorDisplay(porta);
+        checkAlarm(temperatura, portaAberta);
+        addTemperatureHistory(temperatura);
+        saveLastReading(temperatura, porta);
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ temperatura, porta }));
+        }
+      }
+
       const socket = new WebSocket('ws://localhost:8080');
 
       socket.addEventListener('open', () => {
+        socket.send(JSON.stringify({ type: 'register', client: 'browser' }));
         connectionStatus.textContent = 'Conectado';
         connectionStatus.classList.remove('text-rose-400');
         connectionStatus.classList.add('text-emerald-400');
@@ -332,31 +350,6 @@
         }
       });
 
-      function simulateData(temperatura, porta) {
-        updateTemperatureDisplay(temperatura);
-        const portaAberta = updateDoorDisplay(porta);
-        checkAlarm(temperatura, portaAberta);
-        addTemperatureHistory(temperatura);
-        saveLastReading(temperatura, porta);
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ temperatura, porta }));
-        }
-      }
-
-      simulateTempButton.addEventListener('click', () => {
-        const temperatura = Number(simulateTempInput.value) || 0;
-        simulateData(temperatura, lastDoor.textContent === 'ABERTA' ? 'aberta' : 'fechada');
-      });
-
-      simulateOpenButton.addEventListener('click', () => simulateData(Number(simulateTempInput.value) || 2.0, 'aberta'));
-      simulateClosedButton.addEventListener('click', () => simulateData(Number(simulateTempInput.value) || 2.0, 'fechada'));
-      resetButton.addEventListener('click', () => {
-        temperatureHint.textContent = 'Aguardando dados do ESP32...';
-        doorHint.textContent = 'Recebendo atualizações do ESP32.';
-        setAlarmState(false, 'Sem alarme');
-        stopAlarm();
-      });
-
       socket.addEventListener('close', () => {
         connectionStatus.textContent = 'Desconectado';
         connectionStatus.classList.remove('text-emerald-400');
@@ -367,6 +360,45 @@
         connectionStatus.textContent = 'Erro de conexão';
         connectionStatus.classList.remove('text-emerald-400');
         connectionStatus.classList.add('text-rose-400');
+      });
+
+      // Attach event listeners to buttons AFTER socket is created
+      simulateTempButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        const temperatura = Number(simulateTempInput.value) || 0;
+        simulateData(temperatura, lastDoor.textContent === 'ABERTA' ? 'aberta' : 'fechada');
+      });
+
+      simulateOpenButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        simulateData(Number(simulateTempInput.value) || 2.0, 'aberta');
+      });
+
+      simulateClosedButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        simulateData(Number(simulateTempInput.value) || 2.0, 'fechada');
+      });
+
+      manualActivateButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ source: 'browser', type: 'command', command: 'manualAlert', value: true }));
+        }
+      });
+
+      manualDeactivateButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ source: 'browser', type: 'command', command: 'manualAlert', value: false }));
+        }
+      });
+
+      resetButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        temperatureHint.textContent = 'Aguardando dados do ESP32...';
+        doorHint.textContent = 'Recebendo atualizações do ESP32.';
+        setAlarmState(false, 'Sem alarme');
+        stopAlarm();
       });
 
       restoreLastReading();

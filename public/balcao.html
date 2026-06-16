@@ -207,175 +207,246 @@
     </div>
 
     <script>
-      document.addEventListener('DOMContentLoaded', () => {
+      // Global scope - available to all functions
+      const connectStatus = document.getElementById('connectionStatus');
+      const alertList = document.getElementById('alertList');
+      const totalStalls = document.getElementById('totalStalls');
+      const activeAlerts = document.getElementById('activeAlerts');
+      const averageTemp = document.getElementById('averageTemp');
+      const hottestStall = document.getElementById('hottestStall');
+      const stallSelect = document.getElementById('stallSelect');
+      const manualTemp = document.getElementById('manualTemp');
+      const applyManual = document.getElementById('applyManual');
+      const simulateFailure = document.getElementById('simulateFailure');
+      const simulateOscillation = document.getElementById('simulateOscillation');
+      const restoreNormal = document.getElementById('restoreNormal');
+
+      const stallData = {
+        B1: { name: 'Balcão 01', label: 'Bovinos', temp: 3.6, status: 'Normal' },
+        B2: { name: 'Balcão 02', label: 'Frangos', temp: 4.8, status: 'Atenção' },
+        B3: { name: 'Balcão 03', label: 'Suínos', temp: 3.1, status: 'Normal' },
+        B4: { name: 'Balcão 04', label: 'Especiais', temp: 5.2, status: 'Atenção' },
+      };
+
+      const chartLabels = [];
+      const stallOrder = ['B1', 'B2', 'B3', 'B4'];
+      const stallStorageKey = 'carnecerta-stall-state';
+      const lastReadingKey = 'carnecerta-last-reading';
+      let stallChart = null;
+      let socket = null;
+
+      function saveStallState() { localStorage.setItem(stallStorageKey, JSON.stringify(stallData)); }
+
+      function loadStallState() {
+        const saved = localStorage.getItem(stallStorageKey);
+        if (!saved) return;
         try {
-          const connectStatus = document.getElementById('connectionStatus');
-          const alertList = document.getElementById('alertList');
-          const totalStalls = document.getElementById('totalStalls');
-          const activeAlerts = document.getElementById('activeAlerts');
-          const averageTemp = document.getElementById('averageTemp');
-          const hottestStall = document.getElementById('hottestStall');
-          const stallSelect = document.getElementById('stallSelect');
-          const manualTemp = document.getElementById('manualTemp');
-          const applyManual = document.getElementById('applyManual');
-          const simulateFailure = document.getElementById('simulateFailure');
-          const simulateOscillation = document.getElementById('simulateOscillation');
-          const restoreNormal = document.getElementById('restoreNormal');
+          const parsed = JSON.parse(saved);
+          Object.keys(parsed).forEach((key) => {
+            if (stallData[key] && typeof parsed[key].temp === 'number') stallData[key].temp = parsed[key].temp;
+          });
+        } catch (error) { console.warn('Erro ao carregar estado dos balcões:', error); }
+      }
 
-          const stallData = {
-            B1: { name: 'Balcão 01', label: 'Bovinos', temp: 3.6, status: 'Normal' },
-            B2: { name: 'Balcão 02', label: 'Frangos', temp: 4.8, status: 'Atenção' },
-            B3: { name: 'Balcão 03', label: 'Suínos', temp: 3.1, status: 'Normal' },
-            B4: { name: 'Balcão 04', label: 'Especiais', temp: 5.2, status: 'Atenção' },
-          };
-
-          const chartLabels = [];
-          const stallOrder = ['B1', 'B2', 'B3', 'B4'];
-          const stallStorageKey = 'carnecerta-stall-state';
-          const lastReadingKey = 'carnecerta-last-reading';
-
-          function saveStallState() { localStorage.setItem(stallStorageKey, JSON.stringify(stallData)); }
-
-          function loadStallState() {
-            const saved = localStorage.getItem(stallStorageKey);
-            if (!saved) return;
-            try {
-              const parsed = JSON.parse(saved);
-              Object.keys(parsed).forEach((key) => {
-                if (stallData[key] && typeof parsed[key].temp === 'number') stallData[key].temp = parsed[key].temp;
-              });
-            } catch (error) { console.warn('Erro ao carregar estado dos balcões:', error); }
+      function loadLastReading() {
+        const saved = localStorage.getItem(lastReadingKey);
+        if (!saved) return;
+        try {
+          const payload = JSON.parse(saved);
+          if (payload.temperatura !== undefined) {
+            stallData.B1.temp = Number(payload.temperatura);
+            addAlert(`Última temperatura recebida aplicada em ${stallData.B1.label}: ${formatTemp(stallData.B1.temp)}`, getStatus(stallData.B1.temp));
           }
+        } catch (error) { console.warn('Erro ao carregar a última leitura:', error); }
+      }
 
-          function loadLastReading() {
+      function applyIncomingTemperature(temperatura) {
+        const value = Number(temperatura);
+        if (Number.isNaN(value)) return;
+        stallData.B1.temp = value;
+        updateStalls();
+        addAlert(`Temperatura recebida do ESP32 aplicada em ${stallData.B1.label}: ${formatTemp(value)}`, getStatus(value));
+        saveStallState();
+      }
+
+      function getStatus(temp) { if (temp > 4) return 'Crítico'; if (temp > 2) return 'Atenção'; return 'Normal'; }
+
+      function getStatusClasses(status) { switch (status) { case 'Crítico': return ['bg-rose-500/15', 'text-rose-300']; case 'Atenção': return ['bg-amber-500/15', 'text-amber-300']; default: return ['bg-emerald-500/15', 'text-emerald-300']; } }
+
+      function formatTemp(value) { return `${value.toFixed(1).replace('.', ',')} °C`; }
+
+      function updateStallCard(key) {
+        const stall = stallData[key];
+        const tempEl = document.getElementById(`temp-${key}`);
+        const statusEl = document.getElementById(`status-${key}`);
+        const cardEl = document.getElementById(`stall-${key}`);
+        if (!tempEl || !statusEl || !cardEl) return;
+        const status = getStatus(stall.temp);
+        stall.status = status;
+        tempEl.textContent = formatTemp(stall.temp);
+        statusEl.textContent = status;
+        const [bgClass, textClass] = getStatusClasses(status);
+        statusEl.className = `inline-flex rounded-full px-4 py-2 text-sm font-semibold ${bgClass} ${textClass}`;
+        cardEl.classList.remove('border-rose-500/40', 'border-amber-500/40', 'border-emerald-500/40');
+        if (status === 'Crítico') cardEl.classList.add('border-rose-500/40');
+        if (status === 'Atenção') cardEl.classList.add('border-amber-500/40');
+        if (status === 'Normal') cardEl.classList.add('border-emerald-500/40');
+      }
+
+      function updateStalls() { Object.keys(stallData).forEach(updateStallCard); updateSummary(); }
+
+      function updateSummary() {
+        const values = Object.values(stallData);
+        const active = values.filter((stall) => stall.status !== 'Normal').length;
+        const average = values.reduce((sum, stall) => sum + stall.temp, 0) / values.length;
+        const hottest = values.reduce((current, stall) => (stall.temp > current.temp ? stall : current), values[0]);
+        totalStalls.textContent = values.length;
+        activeAlerts.textContent = active;
+        averageTemp.textContent = formatTemp(average);
+        hottestStall.textContent = `${hottest.label} (${formatTemp(hottest.temp)})`;
+      }
+
+      function addAlert(message, level) {
+        const alertItem = document.createElement('div');
+        const classes = { Crítico: 'border-rose-500/20 bg-rose-500/5 text-rose-200', Atenção: 'border-amber-500/20 bg-amber-500/5 text-amber-200', Normal: 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200' }[level] || 'border-slate-700/70 bg-slate-900/80 text-slate-300';
+        alertItem.className = `rounded-3xl border p-4 ${classes}`;
+        alertItem.innerHTML = `<p class="font-semibold">${message}</p><p class="mt-1 text-sm text-slate-400">${new Date().toLocaleTimeString()}</p>`;
+        alertList.prepend(alertItem);
+        if (alertList.children.length > 6) alertList.removeChild(alertList.lastChild);
+      }
+
+      function refreshChart() { 
+        const now = new Date(); 
+        const label = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`; 
+        if (chartLabels.length >= 12) { 
+          chartLabels.shift(); 
+          stallChart.data.datasets.forEach((dataset) => dataset.data.shift()); 
+        } 
+        chartLabels.push(label); 
+        stallChart.data.datasets.forEach((dataset, index) => { 
+          const key = stallOrder[index]; 
+          dataset.data.push(stallData[key].temp); 
+        }); 
+        stallChart.update(); 
+      }
+
+      function simulateFailureMode() { 
+        Object.keys(stallData).forEach((key) => { stallData[key].temp = 6.8 + Math.random() * 1.5; }); 
+        addAlert('Falha de refrigeração detectada em vários balcões', 'Crítico'); 
+        updateStalls(); 
+        refreshChart(); 
+        saveStallState(); 
+      }
+
+      function simulateOscillationMode() { 
+        Object.keys(stallData).forEach((key) => { 
+          const stall = stallData[key]; 
+          stall.temp += (Math.random() - 0.5) * 2.0; 
+          stall.temp = Math.max(1.5, Math.min(8.5, stall.temp)); 
+        }); 
+        addAlert('Oscilação de temperatura detectada', 'Atenção'); 
+        updateStalls(); 
+        refreshChart(); 
+        saveStallState(); 
+      }
+
+      function restoreNormalMode() { 
+        stallData.B1.temp = 3.6; 
+        stallData.B2.temp = 3.8; 
+        stallData.B3.temp = 3.2; 
+        stallData.B4.temp = 3.9; 
+        addAlert('Operação normal restaurada', 'Normal'); 
+        updateStalls(); 
+        refreshChart(); 
+        saveStallState(); 
+      }
+
+      // Initialize on DOM ready
+      document.addEventListener('DOMContentLoaded', () => {
+        // Create chart
+        const datasets = Object.keys(stallData).map((key, index) => ({
+          label: stallData[key].label,
+          data: [],
+          borderColor: ['#22c55e', '#38bdf8', '#f59e0b', '#ef4444'][index],
+          backgroundColor: ['rgba(34,197,94,0.18)', 'rgba(56,189,248,0.18)', 'rgba(245,158,11,0.18)', 'rgba(239,68,68,0.18)'][index],
+          tension: 0.35,
+          pointRadius: 4,
+          fill: false,
+        }));
+
+        const chartCtx = document.getElementById('stallChart').getContext('2d');
+        stallChart = new Chart(chartCtx, {
+          type: 'line',
+          data: { labels: chartLabels, datasets },
+          options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { color: '#94a3b8' } }, y: { beginAtZero: false, grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { color: '#94a3b8' } } }, plugins: { legend: { labels: { color: '#cbd5e1' } }, tooltip: { backgroundColor: '#0f172a', titleColor: '#fff', bodyColor: '#cbd5e1' } } }
+        });
+
+        // Create WebSocket
+        socket = new WebSocket('ws://localhost:8080');
+        socket.addEventListener('open', () => {
+          socket.send(JSON.stringify({ type: 'register', client: 'browser' }));
+          connectStatus.textContent = 'Conectado';
+          connectStatus.classList.remove('text-rose-400');
+          connectStatus.classList.add('text-emerald-400');
+        });
+        socket.addEventListener('message', (event) => { 
+          try { 
+            const payload = JSON.parse(event.data); 
+            if (payload.temperatura !== undefined) applyIncomingTemperature(payload.temperatura); 
+          } catch (error) { 
+            console.warn('Erro ao receber dados via WebSocket:', error); 
+          } 
+        });
+        socket.addEventListener('close', () => { 
+          connectStatus.textContent = 'Desconectado'; 
+          connectStatus.classList.remove('text-emerald-400'); 
+          connectStatus.classList.add('text-rose-400'); 
+        });
+        socket.addEventListener('error', () => { 
+          connectStatus.textContent = 'Erro de conexão'; 
+          connectStatus.classList.remove('text-emerald-400'); 
+          connectStatus.classList.add('text-rose-400'); 
+        });
+
+        // Attach event listeners
+        applyManual.addEventListener('click', (event) => {
+          event.preventDefault();
+          const key = stallSelect.value;
+          let value = Number(manualTemp.value);
+          if (Number.isNaN(value)) {
             const saved = localStorage.getItem(lastReadingKey);
-            if (!saved) return;
-            try {
-              const payload = JSON.parse(saved);
-              if (payload.temperatura !== undefined) {
-                stallData.B1.temp = Number(payload.temperatura);
-                addAlert(`Última temperatura recebida aplicada em ${stallData.B1.label}: ${formatTemp(stallData.B1.temp)}`, getStatus(stallData.B1.temp));
-              }
-            } catch (error) { console.warn('Erro ao carregar a última leitura:', error); }
-          }
-
-          function applyIncomingTemperature(temperatura) {
-            const value = Number(temperatura);
-            if (Number.isNaN(value)) return;
-            stallData.B1.temp = value;
-            updateStalls();
-            addAlert(`Temperatura recebida do ESP32 aplicada em ${stallData.B1.label}: ${formatTemp(value)}`, getStatus(value));
-            saveStallState();
-          }
-
-          const datasets = Object.keys(stallData).map((key, index) => ({
-            label: stallData[key].label,
-            data: [],
-            borderColor: ['#22c55e', '#38bdf8', '#f59e0b', '#ef4444'][index],
-            backgroundColor: ['rgba(34,197,94,0.18)', 'rgba(56,189,248,0.18)', 'rgba(245,158,11,0.18)', 'rgba(239,68,68,0.18)'][index],
-            tension: 0.35,
-            pointRadius: 4,
-            fill: false,
-          }));
-
-          const chartCtx = document.getElementById('stallChart').getContext('2d');
-          const stallChart = new Chart(chartCtx, {
-            type: 'line',
-            data: { labels: chartLabels, datasets },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { color: '#94a3b8' } }, y: { beginAtZero: false, grid: { color: 'rgba(148,163,184,0.12)' }, ticks: { color: '#94a3b8' } } }, plugins: { legend: { labels: { color: '#cbd5e1' } }, tooltip: { backgroundColor: '#0f172a', titleColor: '#fff', bodyColor: '#cbd5e1' } } }
-          });
-
-          function getStatus(temp) { if (temp > 4) return 'Crítico'; if (temp > 2) return 'Atenção'; return 'Normal'; }
-
-          function getStatusClasses(status) { switch (status) { case 'Crítico': return ['bg-rose-500/15', 'text-rose-300']; case 'Atenção': return ['bg-amber-500/15', 'text-amber-300']; default: return ['bg-emerald-500/15', 'text-emerald-300']; } }
-
-          function formatTemp(value) { return `${value.toFixed(1).replace('.', ',')} °C`; }
-
-          function updateStallCard(key) {
-            const stall = stallData[key];
-            const tempEl = document.getElementById(`temp-${key}`);
-            const statusEl = document.getElementById(`status-${key}`);
-            const cardEl = document.getElementById(`stall-${key}`);
-            if (!tempEl || !statusEl || !cardEl) return;
-            const status = getStatus(stall.temp);
-            stall.status = status;
-            tempEl.textContent = formatTemp(stall.temp);
-            statusEl.textContent = status;
-            const [bgClass, textClass] = getStatusClasses(status);
-            statusEl.className = `inline-flex rounded-full px-4 py-2 text-sm font-semibold ${bgClass} ${textClass}`;
-            cardEl.classList.remove('border-rose-500/40', 'border-amber-500/40', 'border-emerald-500/40');
-            if (status === 'Crítico') cardEl.classList.add('border-rose-500/40');
-            if (status === 'Atenção') cardEl.classList.add('border-amber-500/40');
-            if (status === 'Normal') cardEl.classList.add('border-emerald-500/40');
-          }
-
-          function updateStalls() { Object.keys(stallData).forEach(updateStallCard); updateSummary(); }
-
-          function updateSummary() {
-            const values = Object.values(stallData);
-            const active = values.filter((stall) => stall.status !== 'Normal').length;
-            const average = values.reduce((sum, stall) => sum + stall.temp, 0) / values.length;
-            const hottest = values.reduce((current, stall) => (stall.temp > current.temp ? stall : current), values[0]);
-            totalStalls.textContent = values.length;
-            activeAlerts.textContent = active;
-            averageTemp.textContent = formatTemp(average);
-            hottestStall.textContent = `${hottest.label} (${formatTemp(hottest.temp)})`;
-          }
-
-          function addAlert(message, level) {
-            const alertItem = document.createElement('div');
-            const classes = { Crítico: 'border-rose-500/20 bg-rose-500/5 text-rose-200', Atenção: 'border-amber-500/20 bg-amber-500/5 text-amber-200', Normal: 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200' }[level] || 'border-slate-700/70 bg-slate-900/80 text-slate-300';
-            alertItem.className = `rounded-3xl border p-4 ${classes}`;
-            alertItem.innerHTML = `<p class="font-semibold">${message}</p><p class="mt-1 text-sm text-slate-400">${new Date().toLocaleTimeString()}</p>`;
-            alertList.prepend(alertItem);
-            if (alertList.children.length > 6) alertList.removeChild(alertList.lastChild);
-          }
-
-          function refreshChart() { const now = new Date(); const label = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`; if (chartLabels.length >= 12) { chartLabels.shift(); stallChart.data.datasets.forEach((dataset) => dataset.data.shift()); } chartLabels.push(label); stallChart.data.datasets.forEach((dataset, index) => { const key = stallOrder[index]; dataset.data.push(stallData[key].temp); }); stallChart.update(); }
-
-          function randomizeStalls() { Object.keys(stallData).forEach((key) => { const stall = stallData[key]; const variation = (Math.random() - 0.5) * 0.6; stall.temp = Math.max(1.5, Math.min(8.5, stall.temp + variation)); const previous = stall.status; const current = getStatus(stall.temp); if (previous !== current && current !== 'Normal') addAlert(`${stall.label} entrou em estado ${current}`, current); }); updateStalls(); refreshChart(); }
-
-          function simulateFailureMode() { Object.keys(stallData).forEach((key) => { stallData[key].temp = 6.8 + Math.random() * 1.5; }); addAlert('Falha de refrigeração detectada em vários balcões', 'Crítico'); updateStalls(); refreshChart(); saveStallState(); }
-
-          function simulateOscillation() { Object.keys(stallData).forEach((key) => { const stall = stallData[key]; stall.temp += (Math.random() - 0.5) * 2.0; stall.temp = Math.max(1.5, Math.min(8.5, stall.temp)); }); addAlert('Oscilação de temperatura detectada', 'Atenção'); updateStalls(); refreshChart(); saveStallState(); }
-
-          function restoreNormal() { stallData.B1.temp = 3.6; stallData.B2.temp = 3.8; stallData.B3.temp = 3.2; stallData.B4.temp = 3.9; addAlert('Operação normal restaurada', 'Normal'); updateStalls(); refreshChart(); saveStallState(); }
-
-          // Apply manual temperature: if input empty, try to use last dashboard reading
-          applyManual.addEventListener('click', (event) => {
-            event.preventDefault();
-            const key = stallSelect.value;
-            let value = Number(manualTemp.value);
-            if (Number.isNaN(value)) {
-              const saved = localStorage.getItem(lastReadingKey);
-              if (saved) {
-                try { const p = JSON.parse(saved); if (p.temperatura !== undefined) value = Number(p.temperatura); } catch (e) {}
-              }
+            if (saved) {
+              try { const p = JSON.parse(saved); if (p.temperatura !== undefined) value = Number(p.temperatura); } catch (e) {}
             }
-            if (Number.isNaN(value)) return;
-            stallData[key].temp = Math.max(0, Math.min(20, value));
-            updateStalls();
-            addAlert(`Temperatura aplicada em ${stallData[key].label}: ${formatTemp(stallData[key].temp)}`, stallData[key].status);
-            refreshChart();
-            saveStallState();
-          });
-
-          simulateFailure.addEventListener('click', simulateFailureMode);
-          simulateOscillation.addEventListener('click', simulateOscillation);
-          restoreNormal.addEventListener('click', restoreNormal);
-
-          const socket = new WebSocket('ws://localhost:8080');
-          socket.addEventListener('open', () => { connectStatus.textContent = 'Conectado'; connectStatus.classList.remove('text-rose-400'); connectStatus.classList.add('text-emerald-400'); });
-          socket.addEventListener('message', (event) => { try { const payload = JSON.parse(event.data); if (payload.temperatura !== undefined) applyIncomingTemperature(payload.temperatura); } catch (error) { console.warn('Erro ao receber dados via WebSocket:', error); } });
-          socket.addEventListener('close', () => { connectStatus.textContent = 'Desconectado'; connectStatus.classList.remove('text-emerald-400'); connectStatus.classList.add('text-rose-400'); });
-          socket.addEventListener('error', () => { connectStatus.textContent = 'Erro de conexão'; connectStatus.classList.remove('text-emerald-400'); connectStatus.classList.add('text-rose-400'); });
-
-          loadStallState();
-          loadLastReading();
+          }
+          if (Number.isNaN(value)) return;
+          stallData[key].temp = Math.max(0, Math.min(20, value));
           updateStalls();
+          addAlert(`Temperatura aplicada em ${stallData[key].label}: ${formatTemp(stallData[key].temp)}`, stallData[key].status);
           refreshChart();
+          saveStallState();
+        });
 
-        } catch (err) { console.error('Erro no script de balcão:', err); }
+        simulateFailure.addEventListener('click', (e) => {
+          e.preventDefault();
+          simulateFailureMode();
+        });
+
+        simulateOscillation.addEventListener('click', (e) => {
+          e.preventDefault();
+          simulateOscillationMode();
+        });
+
+        restoreNormal.addEventListener('click', (e) => {
+          e.preventDefault();
+          restoreNormalMode();
+        });
+
+        // Load state and initialize
+        loadStallState();
+        loadLastReading();
+        updateStalls();
+        refreshChart();
       });
     </script>
   </body>
