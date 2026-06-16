@@ -390,7 +390,7 @@ Este projeto integra conhecimentos em:
 ## time:
 Barbara Helena Preto Brandino
 Clara Vecchio Machado da Silva
-Jacqueline 
+Jacqueline Leite da Silva 
 Felipe Ferreira de França
 Matheus Henrique
 
