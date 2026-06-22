@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Central de Alertas - CarneCerta IoT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      :root {
+        --bg: #050814;
+        --panel: rgba(2, 6, 23, 0.82);
+        --panel-strong: rgba(15, 23, 42, 0.95);
+        --border: rgba(148, 163, 184, 0.18);
+        --cyan: #22d3ee;
+        --cyan-soft: rgba(34, 211, 238, 0.12);
+        --blue: #0f172a;
+        --blue-soft: rgba(59, 130, 246, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        color: #e2e8f0;
+        background:
+          radial-gradient(circle at top, rgba(34, 211, 238, 0.12), transparent 30%),
+          radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.1), transparent 22%),
+          linear-gradient(180deg, #050814 0%, #07111f 100%);
+      }
+
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 95%);
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        box-shadow: 0 24px 80px rgba(2, 6, 23, 0.45);
+        backdrop-filter: blur(18px);
+      }
+
+      .panel-strong {
+        background: var(--panel-strong);
+      }
+
+      .glow-border {
+        box-shadow: 0 0 32px rgba(34, 211, 238, 0.15), 0 0 70px rgba(59, 130, 246, 0.1);
+      }
+
+      .accent-line {
+        background: linear-gradient(90deg, rgba(34, 211, 238, 0), rgba(34, 211, 238, 0.85), rgba(34, 211, 238, 0));
+      }
+
+      .status-pill {
+        border: 1px solid transparent;
+      }
+
+      .status-normal {
+        color: #86efac;
+        background: rgba(34, 197, 94, 0.12);
+        border-color: rgba(34, 197, 94, 0.22);
+      }
+
+      .status-attention {
+        color: #fbbf24;
+        background: rgba(245, 158, 11, 0.12);
+        border-color: rgba(245, 158, 11, 0.22);
+      }
+
+      .status-critical {
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.12);
+        border-color: rgba(239, 68, 68, 0.25);
+      }
+
+      .timeline-track::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: linear-gradient(180deg, rgba(34, 211, 238, 0.4), rgba(148, 163, 184, 0.08));
+      }
+
+      .timeline-dot {
+        position: relative;
+        z-index: 1;
+      }
+
+      .timeline-dot::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 9999px;
+        background: currentColor;
+        box-shadow: 0 0 0 8px rgba(2, 6, 23, 0.95);
+      }
+
+      input[type='date'],
+      select {
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: linear-gradient(45deg, transparent 50%, #67e8f9 50%), linear-gradient(135deg, #67e8f9 50%, transparent 50%);
+        background-position: calc(100% - 20px) calc(50% - 3px), calc(100% - 14px) calc(50% - 3px);
+        background-size: 6px 6px, 6px 6px;
+        background-repeat: no-repeat;
+      }
+
+      .metric-value {
+        text-shadow: 0 0 18px rgba(34, 211, 238, 0.16);
+      }
+
+      @media (max-width: 640px) {
+        .timeline-track::before {
+          left: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-100">
+    <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <header class="panel glow-border mb-8 rounded-[2rem] p-6 lg:p-8">
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div class="space-y-4">
+            <p class="text-sm uppercase tracking-[0.35em] text-cyan-300/80">CarneCerta IoT</p>
+            <div>
+              <h1 class="text-4xl font-semibold text-white sm:text-5xl">Central de Alertas</h1>
+              <p class="mt-3 max-w-3xl text-slate-400">Monitoramento de eventos críticos em tempo real.</p>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-3 rounded-[1.75rem] border border-slate-700/60 bg-slate-900/80 p-4 shadow-xl shadow-cyan-500/10 sm:min-w-[280px]">
+            <div>
+              <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Status do sistema</p>
+              <p id="systemPulse" class="mt-2 text-lg font-semibold text-emerald-300">Operação supervisionada</p>
+            </div>
+            <a href="index.html" class="inline-flex items-center justify-center rounded-3xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300">
+              Voltar ao Dashboard
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <main class="space-y-6">
+        <section class="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          <article class="panel panel-strong rounded-[1.75rem] p-6">
+            <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Alertas Ativos</p>
+            <div class="mt-4 flex items-end justify-between gap-4">
+              <div>
+                <h2 id="activeAlertsValue" class="metric-value text-4xl font-semibold text-white">0</h2>
+                <p class="mt-2 text-sm text-slate-400">Ocorrências em monitoramento</p>
+              </div>
+              <div class="rounded-3xl bg-rose-500/10 p-4 text-rose-300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86l-7.42 12.84A2 2 0 004.59 19h14.82a2 2 0 001.72-3.3L12.71 3.86a1 1 0 00-1.72 0z" />
+                </svg>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel panel-strong rounded-[1.75rem] p-6">
+            <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Alertas Resolvidos</p>
+            <div class="mt-4 flex items-end justify-between gap-4">
+              <div>
+                <h2 id="resolvedAlertsValue" class="metric-value text-4xl font-semibold text-white">0</h2>
+                <p class="mt-2 text-sm text-slate-400">Eventos já tratados</p>
+              </div>
+              <div class="rounded-3xl bg-emerald-500/10 p-4 text-emerald-300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m1.5-5.5A7.5 7.5 0 112.5 9c0-4.142 3.358-7.5 7.5-7.5s7.5 3.358 7.5 7.5z" />
+                </svg>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel panel-strong rounded-[1.75rem] p-6">
+            <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Eventos Hoje</p>
+            <div class="mt-4 flex items-end justify-between gap-4">
+              <div>
+                <h2 id="todayEventsValue" class="metric-value text-4xl font-semibold text-white">0</h2>
+                <p class="mt-2 text-sm text-slate-400">Registros no dia atual</p>
+              </div>
+              <div class="rounded-3xl bg-cyan-500/10 p-4 text-cyan-300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel panel-strong rounded-[1.75rem] p-6">
+            <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Nível de Risco Geral</p>
+            <div class="mt-4 flex items-end justify-between gap-4">
+              <div>
+                <h2 id="riskLevelValue" class="metric-value text-4xl font-semibold text-white">-</h2>
+                <p id="riskLevelHint" class="mt-2 text-sm text-slate-400">Análise automática dos eventos</p>
+              </div>
+              <div class="rounded-3xl bg-amber-500/10 p-4 text-amber-300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+          <article class="panel rounded-[1.75rem] p-6">
+            <div class="flex flex-col gap-4 border-b border-slate-700/60 pb-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Tabela de Eventos</p>
+                <h3 class="mt-2 text-2xl font-semibold text-white">Ocorrências registradas</h3>
+              </div>
+              <div class="grid gap-3 md:grid-cols-3">
+                <label class="flex min-w-[160px] flex-col gap-2 text-sm text-slate-400">
+                  Data
+                  <input id="filterDate" type="date" class="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20" />
+                </label>
+                <label class="flex min-w-[180px] flex-col gap-2 text-sm text-slate-400">
+                  Tipo de alerta
+                  <select id="filterType" class="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20">
+                    <option value="all">Todos</option>
+                    <option value="temperatura">Temperatura</option>
+                    <option value="porta">Porta</option>
+                    <option value="sensor">Sensor</option>
+                    <option value="energia">Energia</option>
+                  </select>
+                </label>
+                <label class="flex min-w-[160px] flex-col gap-2 text-sm text-slate-400">
+                  Severidade
+                  <select id="filterSeverity" class="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20">
+                    <option value="all">Todas</option>
+                    <option value="normal">Normal</option>
+                    <option value="attention">Atenção</option>
+                    <option value="critical">Crítico</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-700/60 bg-slate-950/55">
+              <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-800 text-left text-sm">
+                  <thead class="bg-slate-900/90 text-slate-400">
+                    <tr>
+                      <th class="px-5 py-4 font-medium uppercase tracking-[0.2em]">Data</th>
+                      <th class="px-5 py-4 font-medium uppercase tracking-[0.2em]">Hora</th>
+                      <th class="px-5 py-4 font-medium uppercase tracking-[0.2em]">Equipamento</th>
+                      <th class="px-5 py-4 font-medium uppercase tracking-[0.2em]">Tipo</th>
+                      <th class="px-5 py-4 font-medium uppercase tracking-[0.2em]">Severidade</th>
+                      <th class="px-5 py-4 font-medium uppercase tracking-[0.2em]">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="eventsTableBody" class="divide-y divide-slate-800/80 bg-slate-950/40"></tbody>
+                </table>
+              </div>
+            </div>
+          </article>
+
+          <aside class="space-y-6">
+            <article class="panel rounded-[1.75rem] p-6">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Indicadores</p>
+                  <h3 class="mt-2 text-2xl font-semibold text-white">Mapa de severidade</h3>
+                </div>
+                <span class="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs uppercase tracking-[0.25em] text-cyan-300">Chart.js</span>
+              </div>
+              <div class="mt-5 rounded-[1.5rem] border border-slate-700/60 bg-slate-900/70 p-4">
+                <canvas id="severityChart" class="h-72 w-full"></canvas>
+              </div>
+            </article>
+
+            <article class="panel rounded-[1.75rem] p-6">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Legenda</p>
+                  <h3 class="mt-2 text-2xl font-semibold text-white">Status visual</h3>
+                </div>
+                <span class="rounded-full border border-slate-700/60 bg-slate-900 px-4 py-2 text-xs uppercase tracking-[0.25em] text-slate-400">Tempo real</span>
+              </div>
+
+              <div class="mt-5 space-y-3 text-sm text-slate-300">
+                <div class="flex items-center gap-3 rounded-2xl border border-emerald-500/15 bg-emerald-500/5 px-4 py-3">
+                  <span class="h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_18px_rgba(74,222,128,0.7)]"></span>
+                  <span>Verde = Normal</span>
+                </div>
+                <div class="flex items-center gap-3 rounded-2xl border border-amber-500/15 bg-amber-500/5 px-4 py-3">
+                  <span class="h-3 w-3 rounded-full bg-amber-400 shadow-[0_0_18px_rgba(250,204,21,0.7)]"></span>
+                  <span>Amarelo = Atenção</span>
+                </div>
+                <div class="flex items-center gap-3 rounded-2xl border border-rose-500/15 bg-rose-500/5 px-4 py-3">
+                  <span class="h-3 w-3 rounded-full bg-rose-400 shadow-[0_0_18px_rgba(248,113,113,0.7)]"></span>
+                  <span>Vermelho = Crítico</span>
+                </div>
+              </div>
+            </article>
+          </aside>
+        </section>
+
+        <section class="panel rounded-[1.75rem] p-6">
+          <div class="flex flex-col gap-4 border-b border-slate-700/60 pb-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="text-sm uppercase tracking-[0.25em] text-slate-400">Timeline Visual</p>
+              <h3 class="mt-2 text-2xl font-semibold text-white">Linha do tempo dos eventos recentes</h3>
+            </div>
+            <div class="rounded-full border border-slate-700/60 bg-slate-900 px-4 py-2 text-xs uppercase tracking-[0.25em] text-slate-400">Eventos priorizados</div>
+          </div>
+
+          <div id="timelineContainer" class="relative timeline-track mt-6 space-y-4 pl-10"></div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const events = [
+        { date: '2026-06-21', time: '08:12', equipment: 'Câmara Fria 01', type: 'temperatura', label: 'Temperatura alta', severity: 'critical', status: 'Ativo', details: 'Leitura acima do limite seguro por 9 min.' },
+        { date: '2026-06-21', time: '09:05', equipment: 'Porta Lateral', type: 'porta', label: 'Porta aberta', severity: 'attention', status: 'Em análise', details: 'Abertura prolongada detectada pelo sensor magnético.' },
+        { date: '2026-06-21', time: '09:42', equipment: 'Sensor de Umidade', type: 'sensor', label: 'Falha intermitente', severity: 'attention', status: 'Ativo', details: 'Pacote de dados ausente em 3 ciclos consecutivos.' },
+        { date: '2026-06-21', time: '10:18', equipment: 'Gerador Auxiliar', type: 'energia', label: 'Queda de energia', severity: 'critical', status: 'Ativo', details: 'Modo de contingência acionado automaticamente.' },
+        { date: '2026-06-21', time: '11:03', equipment: 'Câmara Fria 02', type: 'temperatura', label: 'Oscilação de temperatura', severity: 'attention', status: 'Resolvido', details: 'Equipamento voltou à faixa operacional após ajuste.' },
+        { date: '2026-06-20', time: '16:27', equipment: 'Câmara Fria 03', type: 'temperatura', label: 'Temperatura normalizada', severity: 'normal', status: 'Resolvido', details: 'Registro arquivado como evento sem impacto.' },
+        { date: '2026-06-20', time: '14:11', equipment: 'Porta Frontal', type: 'porta', label: 'Fechamento concluído', severity: 'normal', status: 'Resolvido', details: 'Retorno ao padrão após operação manual.' },
+        { date: '2026-06-19', time: '18:50', equipment: 'Painel de Controle', type: 'sensor', label: 'Calibração concluída', severity: 'normal', status: 'Resolvido', details: 'Ajuste preventivo executado com sucesso.' },
+      ];
+
+      const statusMap = {
+        normal: { label: 'Normal', className: 'status-normal' },
+        attention: { label: 'Atenção', className: 'status-attention' },
+        critical: { label: 'Crítico', className: 'status-critical' },
+      };
+
+      const typeMap = {
+        temperatura: 'Temperatura',
+        porta: 'Porta',
+        sensor: 'Sensor',
+        energia: 'Energia',
+      };
+
+      const tableBody = document.getElementById('eventsTableBody');
+      const timelineContainer = document.getElementById('timelineContainer');
+      const filterDate = document.getElementById('filterDate');
+      const filterType = document.getElementById('filterType');
+      const filterSeverity = document.getElementById('filterSeverity');
+      const activeAlertsValue = document.getElementById('activeAlertsValue');
+      const resolvedAlertsValue = document.getElementById('resolvedAlertsValue');
+      const todayEventsValue = document.getElementById('todayEventsValue');
+      const riskLevelValue = document.getElementById('riskLevelValue');
+      const riskLevelHint = document.getElementById('riskLevelHint');
+      const systemPulse = document.getElementById('systemPulse');
+
+      const todayIso = new Date().toISOString().slice(0, 10);
+      filterDate.value = todayIso;
+
+      function formatDate(isoDate) {
+        return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${isoDate}T00:00:00`));
+      }
+
+      function getSeverityLabel(severity) {
+        return statusMap[severity]?.label ?? severity;
+      }
+
+      function getSeverityClass(severity) {
+        return statusMap[severity]?.className ?? 'status-normal';
+      }
+
+      function getRiskLevel(filteredEvents) {
+        const activeCritical = filteredEvents.some((event) => event.status !== 'Resolvido' && event.severity === 'critical');
+        if (activeCritical) return { label: 'Crítico', hint: 'Há ocorrências críticas em andamento.', tone: 'text-rose-300' };
+
+        const attentionCount = filteredEvents.filter((event) => event.severity === 'attention' && event.status !== 'Resolvido').length;
+        if (attentionCount > 0) return { label: 'Atenção', hint: 'Eventos requerem acompanhamento operacional.', tone: 'text-amber-300' };
+
+        return { label: 'Normal', hint: 'Operação dentro da faixa esperada.', tone: 'text-emerald-300' };
+      }
+
+      function filterEvents() {
+        return events.filter((event) => {
+          const matchesDate = !filterDate.value || event.date === filterDate.value;
+          const matchesType = filterType.value === 'all' || event.type === filterType.value;
+          const matchesSeverity = filterSeverity.value === 'all' || event.severity === filterSeverity.value;
+          return matchesDate && matchesType && matchesSeverity;
+        });
+      }
+
+      function renderTable(filteredEvents) {
+        if (!filteredEvents.length) {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="6" class="px-5 py-8 text-center text-slate-400">
+                Nenhum evento encontrado com os filtros selecionados.
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tableBody.innerHTML = filteredEvents
+          .map((event) => `
+            <tr class="transition hover:bg-slate-900/70">
+              <td class="px-5 py-4 text-slate-300">${formatDate(event.date)}</td>
+              <td class="px-5 py-4 text-slate-300">${event.time}</td>
+              <td class="px-5 py-4 font-medium text-white">${event.equipment}</td>
+              <td class="px-5 py-4 text-slate-300">${typeMap[event.type]}</td>
+              <td class="px-5 py-4">
+                <span class="status-pill inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${getSeverityClass(event.severity)}">
+                  ${getSeverityLabel(event.severity)}
+                </span>
+              </td>
+              <td class="px-5 py-4 text-slate-300">${event.status}</td>
+            </tr>
+          `)
+          .join('');
+      }
+
+      function renderTimeline(filteredEvents) {
+        const items = [...filteredEvents].sort((a, b) => `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`)).slice(0, 5);
+
+        if (!items.length) {
+          timelineContainer.innerHTML = '<p class="pl-0 text-slate-400">Sem eventos para exibir na timeline.</p>';
+          return;
+        }
+
+        timelineContainer.innerHTML = items
+          .map((event) => {
+            const severityColor = event.severity === 'critical' ? 'text-rose-400' : event.severity === 'attention' ? 'text-amber-400' : 'text-emerald-400';
+            const borderColor = event.severity === 'critical' ? 'border-rose-500/20 bg-rose-500/5' : event.severity === 'attention' ? 'border-amber-500/20 bg-amber-500/5' : 'border-emerald-500/20 bg-emerald-500/5';
+
+            return `
+              <article class="relative rounded-[1.5rem] border ${borderColor} p-5 pl-6">
+                <span class="timeline-dot absolute left-[-3px] top-6 h-4 w-4 rounded-full ${severityColor}"></span>
+                <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div class="space-y-2">
+                    <p class="text-xs uppercase tracking-[0.3em] text-slate-500">${formatDate(event.date)} • ${event.time}</p>
+                    <h4 class="text-xl font-semibold text-white">${event.equipment}</h4>
+                    <p class="max-w-3xl text-sm text-slate-400">${event.details}</p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="status-pill inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${getSeverityClass(event.severity)}">${getSeverityLabel(event.severity)}</span>
+                    <span class="rounded-full border border-slate-700/70 bg-slate-900 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-400">${typeMap[event.type]}</span>
+                    <span class="rounded-full border border-slate-700/70 bg-slate-900 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-400">${event.status}</span>
+                  </div>
+                </div>
+              </article>
+            `;
+          })
+          .join('');
+      }
+
+      const severityChart = new Chart(document.getElementById('severityChart'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Normal', 'Atenção', 'Crítico'],
+          datasets: [
+            {
+              data: [0, 0, 0],
+              backgroundColor: ['rgba(34, 197, 94, 0.85)', 'rgba(245, 158, 11, 0.85)', 'rgba(239, 68, 68, 0.88)'],
+              borderColor: ['rgba(2, 6, 23, 1)', 'rgba(2, 6, 23, 1)', 'rgba(2, 6, 23, 1)'],
+              borderWidth: 4,
+              hoverOffset: 8,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '64%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: '#cbd5e1',
+                usePointStyle: true,
+                padding: 18,
+              },
+            },
+            tooltip: {
+              backgroundColor: '#0f172a',
+              titleColor: '#fff',
+              bodyColor: '#cbd5e1',
+            },
+          },
+        },
+      });
+
+      function updateChart(filteredEvents) {
+        const counts = {
+          normal: filteredEvents.filter((event) => event.severity === 'normal').length,
+          attention: filteredEvents.filter((event) => event.severity === 'attention').length,
+          critical: filteredEvents.filter((event) => event.severity === 'critical').length,
+        };
+
+        severityChart.data.datasets[0].data = [counts.normal, counts.attention, counts.critical];
+        severityChart.update();
+      }
+
+      function updateSummary(filteredEvents) {
+        const activeAlerts = filteredEvents.filter((event) => event.status !== 'Resolvido');
+        const resolvedAlerts = filteredEvents.filter((event) => event.status === 'Resolvido');
+        const todayEvents = filteredEvents.filter((event) => event.date === todayIso);
+        const risk = getRiskLevel(filteredEvents);
+
+        activeAlertsValue.textContent = activeAlerts.length;
+        resolvedAlertsValue.textContent = resolvedAlerts.length;
+        todayEventsValue.textContent = todayEvents.length;
+        riskLevelValue.textContent = risk.label;
+        riskLevelValue.className = `metric-value text-4xl font-semibold ${risk.tone}`;
+        riskLevelHint.textContent = risk.hint;
+
+        const pulseMap = {
+          Crítico: 'text-rose-300',
+          Atenção: 'text-amber-300',
+          Normal: 'text-emerald-300',
+        };
+
+        systemPulse.textContent = `Risco ${risk.label}`;
+        systemPulse.className = `mt-2 text-lg font-semibold ${pulseMap[risk.label]}`;
+      }
+
+      function refreshView() {
+        const filteredEvents = filterEvents();
+        renderTable(filteredEvents);
+        renderTimeline(filteredEvents);
+        updateSummary(filteredEvents);
+        updateChart(filteredEvents);
+      }
+
+      [filterDate, filterType, filterSeverity].forEach((control) => control.addEventListener('change', refreshView));
+      refreshView();
+    </script>
+  </body>
+</html>
